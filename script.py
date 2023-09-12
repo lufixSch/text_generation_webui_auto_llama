@@ -1,4 +1,4 @@
-from extensions.auto_llama.tool import WikipediaTool
+from extensions.auto_llama.tool import WikipediaTool, DuckDuckGoSearchTool
 from extensions.auto_llama.agent import BaseAgent, PromptTemplate
 from extensions.auto_llama.llm import OobaboogaLLM
 
@@ -6,7 +6,9 @@ from modules import chat
 
 params = {
     "display_name": "AutoLLaMa",
-    "api_endpoint": "http://localhost:5000"
+    "api_endpoint": "http://localhost:5000",
+    "max_iter": 10,
+    "do_summary": False
 }
 
 template = PromptTemplate(
@@ -28,8 +30,7 @@ Action Input: the input to the action
 Observation: the result of the action
 ... (this Thought/Action/Action Input/Observation can repeat N times)
 Thought: I now know the final answer
-Final Answer: the final answer to the original input or the final conclusion to your thoughts
-
+Final Answer: the final answer to the original input or the final conclusion to your thoughts. It should always contain the requested information in some form
 
 Begin!
 
@@ -38,7 +39,8 @@ Begin!
 )
 
 tools = [
-    WikipediaTool()
+    WikipediaTool(),
+    DuckDuckGoSearchTool()
 ]
 
 llm = OobaboogaLLM(params['api_endpoint'], stopping_strings=[f'\n{template.observation_keyword}'])
@@ -56,9 +58,7 @@ def custom_generate_chat_prompt(user_input, state, **kwargs):
         context_str = "Your reply should be based on this additional context:"
         
         objective = user_input.replace("/do", "").lstrip()
-        res = agent.run(objective)
-        
-        print(f"AutoLLaMa Result: {res}")
+        res = agent.run(objective, max_iter=params['max_iter'], do_summary=params['do_summary'])
         
         old_context = str(state['context']).strip()
         context_already_included = context_str in old_context

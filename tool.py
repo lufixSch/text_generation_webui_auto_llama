@@ -1,7 +1,10 @@
 from abc import ABC, abstractmethod
+from itertools import islice
 
-from langchain.utilities import WikipediaAPIWrapper
+import wikipedia
+from duckduckgo_search import DDGS
 
+from extensions.auto_llama.llm import LLMInterface
 
 class ActionStep:
     """One step in the action chain"""
@@ -55,7 +58,7 @@ class BaseTool(ABC):
         self.keywords = keywords
 
     @abstractmethod
-    def run(self, query: str) -> str:
+    def run(self, query: str, objective: str) -> str:
         """Execute Tool"""
 
         raise NotImplementedError("Every tool needs to implement the `run` method")
@@ -83,14 +86,86 @@ class NoneTool(BaseTool):
 class WikipediaTool(BaseTool):
     """Search wikipedia"""
 
-    wiki_api = WikipediaAPIWrapper()
-
-    def __init__(self):
+    def __init__(self, max_articles: int=1):
+        self.max_articles = max_articles
+        
         super().__init__(
             "Wikipedia",
             description="Wikipedia serves as a versatile tool, offering uses such as gathering background information, exploring unfamiliar topics, finding reliable sources, understanding current events, discovering new interests, and obtaining a comprehensive overview on diverse subjects like historical events, scientific concepts, biographies of notable individuals, geographical details, cultural phenomena, artistic works, technological advancements, social issues, academic subjects, making it a valuable resource for learning and knowledge acquisition.",
-            keywords=["search", "Search", "Wikipedia", "wikipedia"],
+            keywords=["learn", "Learn", "discover", "Discover", "Wikipedia", "wikipedia"],
         )
 
-    def run(self, query: str) -> str:
-        return self.wiki_api.run(query)
+    def run(self, query: str, _:str) -> str:
+        articles = wikipedia.search(query)[:self.max_articles]
+        
+        summaries = []
+        for article in articles:
+            try:
+                summary = wikipedia.summary(article, auto_suggest=False)
+            except wikipedia.PageError as err:
+                continue
+            
+            summaries.append(f"{article}\n{summary}")
+            
+        if not summaries:
+            return "No good Wikipedia Search Result was found"
+            
+        return "\n\n".join(summaries)
+
+
+class DuckDuckGoSearchTool(BaseTool):
+    """ Search DuckDuckGo """
+    
+    def __init__(self, max_results: int=3):
+        self.max_results = max_results
+        
+        super().__init__(
+            "DuckDuckGo",
+            description="The DuckDuckGo search engine is a tool designed to find information on the Internet by searching and retrieving web pages that contain the desired information. It function as an index to the billions of web pages available on the internet and allows you to find information about specific topics or recent events, news, documentation of programs, user generated content like forums or blogs. Inputs are keywords or phrases related to their topic of interest, and the search engine will display results based on relevancy",
+            keywords=["search", "Search", "find", "Find", "duckduckgo", "DuckDuckGo"]
+        )
+        
+    def run(self, query: str, _: str) -> str:
+        with DDGS() as ddgs:
+            results = ""
+            
+            for t in islice(ddgs.text(query), self.max_results):
+                results += "\n\n" + t['title'] + "\n" + t['body'] + "\nSource: " + t['href']
+
+            if results == "":
+                return "No good DuckDuckGo Search Result was found"
+
+            return results
+        
+        
+class SummarizeTool(BaseTool):
+    """ Summarize Information based on the Objective """
+    
+    template = """
+Summarize the following text regarding the Objective: {objective}
+
+Make sure too kee important information like the source or dates and numbers
+
+Text:
+{text}
+
+Summary:
+
+"""
+    
+    def __init__(self, llm: LLMInterface, template: str = None):
+        self.llm = llm
+        
+        if template:
+            self.template = template
+        
+        super().__init__(
+            "Summarize",
+            description="Summarize is able to reduce long/complex content on its main information, make complex topics easier to understand and remove unimportant parts",
+            keywords=["summary", "Summary", "summarize", "Summarize"]
+        )
+        
+    def run(self, query: str, objective: str) -> str:
+        prompt = self.template.format(objective=objective, text=query)
+        
+        return self.llm.completion(prompt)

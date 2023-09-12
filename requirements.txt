@@ -1,3 +1,2 @@
 wikipedia
-langchain
-pexpect
+duckduckgo_search
