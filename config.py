@@ -1,7 +1,19 @@
 import os, json
+
+import extensions.auto_llama.shared as shared
 from extensions.auto_llama.agent import PromptTemplate
 
 _BASE_PATH = os.path.dirname(os.path.abspath(__file__))
+
+def update_template(name: str, key: str, value: str):
+    """Update shared templates"""
+
+    setattr(shared.templates[name], key, value)
+
+def create_template(name: str, template: PromptTemplate):
+    """Create new template"""
+
+    shared.templates[name] = template
 
 def load_templates() -> dict[str, PromptTemplate]:
     """load templates"""

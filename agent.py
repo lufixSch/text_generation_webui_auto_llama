@@ -3,7 +3,13 @@ import re
 from enum import Enum
 
 from extensions.auto_llama.llm import LLMInterface
-from extensions.auto_llama.tool import BaseTool, ActionStep, FinalStep, NoneTool, SummarizeTool
+from extensions.auto_llama.tool import (
+    BaseTool,
+    ActionStep,
+    FinalStep,
+    NoneTool,
+    SummarizeTool,
+)
 
 
 class AgentError(Exception):
@@ -50,9 +56,11 @@ class PromptTemplate:
 
 class BaseAgent:
     """AutoLLaMa Agent which controls the Action chain"""
-    
-    summary_prefix = "When answering the question consider the following additional information:"
-    
+
+    summary_prefix = (
+        "When answering the question consider the following additional information:"
+    )
+
     def __init__(
         self,
         name: str,
@@ -67,14 +75,16 @@ class BaseAgent:
         self.llm = llm
         self.tools = tools
 
-    def run(self, objective: str, max_iter: int = 10, do_summary: bool = True) -> tuple[AnswerType, str]:
+    def run(
+        self, objective: str, max_iter: int = 10, do_summary: bool = True
+    ) -> tuple[AnswerType, str]:
         """Execute the action chain
-        
+
         ARGUMENTS
             objective (str): Task/Question/Problem which should be solved by the Agent
             max_iter (int): Maximum iterations after which the chain exits automatically (Default: 10)
             do_summary (int): Whether the observations of A tool should be summarized. Reduces Absolute number of tokens in the prompt but increases Runtime (Default: True)
-        
+
         RETURNS
             answer_type (AnswerType): Type of answer
             answer (str): The result of the action chain
@@ -97,7 +107,10 @@ class BaseAgent:
                 print(prompt)
 
             # Prompt LLM
-            res = self.llm.completion(prompt)
+            res = self.llm.completion(
+                prompt,
+                stopping_strings=[f"\n{self.prompt_template.observation_keyword}"]
+            )
 
             if self.verbose:
                 print("Response: ----------")
@@ -118,11 +131,11 @@ class BaseAgent:
             print(f">> Running Tool: {step.tool.name}")
 
             observation = step.tool.run(step.action_query, objective)
-            
+
             if do_summary:
                 print(f">>> Summarizing Results")
-                observation = summarize_tool.run(observation, objective)
-            
+                observation = summarize_tool.run(observation, step.action_query)
+
             step.set_observation(observation)
 
             steps.append(step)
@@ -131,7 +144,7 @@ class BaseAgent:
 
         return (
             AnswerType.CONTEXT,
-            summarize_tool.run("\n\n".join((step.observation for step in steps)))
+            summarize_tool.run("\n\n".join((step.observation for step in steps)), objective),
         )
 
     def _generate_prompt(self, objective: str, steps: list[ActionStep]) -> str:
@@ -159,7 +172,7 @@ class BaseAgent:
             objective=objective,
             tools_keywords=tools_keywords,
             tools=tools,
-            agent_scratchpad=agent_scratchpad
+            agent_scratchpad=agent_scratchpad,
         )
 
     def _parse_output(self, output: str) -> ActionStep:

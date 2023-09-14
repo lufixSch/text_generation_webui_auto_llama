@@ -80,7 +80,7 @@ class NoneTool(BaseTool):
     def __init__(self):
         super().__init__("None", "No matching tool was found")
 
-    def run(self, query: str) -> str:
+    def run(self, query: str, _:str) -> str:
         return "No tool was found to perform this Action"
 
 
