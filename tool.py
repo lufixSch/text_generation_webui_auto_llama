@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from itertools import islice
 
 import wikipedia
+import wolframalpha
 from duckduckgo_search import DDGS
 
 from extensions.auto_llama.llm import LLMInterface
@@ -169,3 +170,17 @@ Summary:
         prompt = self.template.format(objective=objective, text=query)
         
         return self.llm.completion(prompt)
+    
+
+# class CalculatorTool(BaseTool):
+#     """ Solve math related problems using wolfram Alpha """
+#     
+#     def __init__(self):
+#         super().__init__(
+#             "Calculator",
+#             description="A calculator powered by Wolfram Alpha is a digital tool that performs various calculations using advanced computational methods. It offers extensive functionality beyond traditional mathematical operations, allowing users to solve complex problems involving physics, chemistry, engineering, and other fields. Unlike conventional calculators, it utilizes Wolfram's vast collection of curated datasets and algorithms to provide accurate and precise solutions to a wide range of problems. Additionally, it provides step-by-step explanations, visualizations, and related knowledge for better understanding and insight into the problem being solved.",
+#             keywords=["calculate", "Calculate", "Solve", "solve", "Problem", "problem", "equation" "formula"]
+#         )
+#         
+#     def run(self, query: str, _: str) -> str:
+#         pass

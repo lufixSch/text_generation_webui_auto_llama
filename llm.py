@@ -19,30 +19,30 @@ class OobaboogaLLM(LLMInterface):
     def __init__(
         self,
         api_endpoint: str,
+    ):
+        self.api_endpoint = api_endpoint
+
+    def completion(
+        self,
+        prompt: str,
         stopping_strings: list[str] = [],
         temperature: float = 0.5,
         max_new_tokens: int = 200,
-    ):
-        self.api_endpoint = api_endpoint
-        self.stopping_strings = stopping_strings
-        self.temperature = temperature
-        self.max_new_tokens = max_new_tokens
-
-    def completion(self, prompt: str) -> str:
+    ) -> str:
         url = f"{self.api_endpoint}/api/v1/generate"
         body = {
             "prompt": prompt,
-            "stopping_strings": self.stopping_strings,
-            "temperature": self.temperature,
-            "max_new_tokens": self.max_new_tokens,
+            "stopping_strings": stopping_strings,
+            "temperature": temperature,
+            "max_new_tokens": max_new_tokens,
         }
-        
+
         res = req.post(url, json=body)
-        
+
         if res.status_code != 200:
             raise ValueError(f"LLM Completion failed with code {res.status_code}")
-        
+
         res_dict = res.json()
-        text = res_dict['results'][0]['text']
-        
+        text = res_dict["results"][0]["text"]
+
         return text
