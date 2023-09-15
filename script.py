@@ -4,10 +4,10 @@ import gradio as gr
 import extensions.auto_llama.shared as shared
 
 from extensions.auto_llama.tool import WikipediaTool, DuckDuckGoSearchTool
-from extensions.auto_llama.agent import BaseAgent, PromptTemplate
+from extensions.auto_llama.agent import ToolChainAgent, SummaryAgent, ObjectiveAgent
 from extensions.auto_llama.llm import OobaboogaLLM
-from extensions.auto_llama.config import load_templates
-from extensions.auto_llama.ui import template_tab, tool_tab
+from extensions.auto_llama.config import load_templates, get_active_template
+from extensions.auto_llama.ui import tool_chain_agent_tab, tool_tab, summary_agent_tab
 
 from modules import chat, extensions
 
@@ -19,26 +19,54 @@ params = {
     "verbose": True,
     "max_iter": 10,
     "do_summary": True,
-    "active_template": "default",
+    "active_templates": {
+        "ToolChainAgent": "default",
+        "SummaryAgent": "default",
+        "ObjectiveAgent": "default",
+    },
     "active_tools": ["DuckDuckGo", "Wikipedia"],
 }
 
 shared.templates = load_templates()
-shared.active_template = params["active_template"]
+shared.active_templates = params["active_templates"]
 
 shared.active_tools = set(params["active_tools"])
 
+shared.llm = OobaboogaLLM(params["api_endpoint"])
 
-def create_agent():
-    llm = OobaboogaLLM(params["api_endpoint"])
-    return BaseAgent(
-        "AutoLLaMa",
-        shared.templates[shared.active_template],
-        llm,
+
+def create_objective_agent():
+    return ObjectiveAgent(
+        "ObjectiveAgent",
+        get_active_template("ObjectiveAgent"),
+        shared.llm,
+        verbose=params["verbose"]
+    )
+
+def create_tool_chain_agent():
+    return ToolChainAgent(
+        "ToolChainAgent",
+        get_active_template("ToolChainAgent"),
+        shared.llm,
+        SummaryAgent(
+            "SummaryAgent",
+            get_active_template("SummaryAgent"),
+            shared.llm,
+            verbose=params["verbose"],
+        ),
         [tool for tool in shared.tools if tool.name in shared.active_tools],
         verbose=params["verbose"],
     )
-
+    
+def generate_objective(user_input: str, history: list[tuple[str, str]]):
+    chat_messages = ""
+    for message, reply in history:
+        chat_messages += f"User: {message}\n" if message else ""
+        chat_messages += f"Chatbot: {reply}\n" if reply else ""
+    
+    chat_messages += f"User: {user_input}"
+    
+    return create_objective_agent().run(chat_messages)[1]
 
 def ui():
     """
@@ -53,7 +81,8 @@ def ui():
 
     with gr.Accordion("AutoLLaMa", open=False):
         tool_tab()
-        template_tab()
+        tool_chain_agent_tab()
+        summary_agent_tab()
 
 
 def custom_generate_chat_prompt(user_input, state, **kwargs):
@@ -65,8 +94,11 @@ def custom_generate_chat_prompt(user_input, state, **kwargs):
     if user_input[:3] == "/do":
         context_str = "Your reply should be based on this additional context:"
 
-        objective = user_input.replace("/do", "").lstrip()
-        res = create_agent().run(
+        user_input = user_input.replace("/do", "").lstrip()
+        
+        objective = generate_objective(user_input, state["history"]["visible"])
+        
+        res = create_tool_chain_agent().run(
             objective, max_iter=params["max_iter"], do_summary=params["do_summary"]
         )
 

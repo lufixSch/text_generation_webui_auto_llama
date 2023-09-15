@@ -8,8 +8,8 @@ from extensions.auto_llama.tool import (
     ActionStep,
     FinalStep,
     NoneTool,
-    SummarizeTool,
 )
+from extensions.auto_llama.templates import ToolChainTemplate, SummaryTemplate, ObjectiveTemplate
 
 
 class AgentError(Exception):
@@ -34,38 +34,80 @@ class AnswerType(Enum):
     """ Text based result which should be added to the response """
 
 
-class PromptTemplate:
-    """Prompt template information"""
-
-    def __init__(
-        self,
-        tool_keyword: str,
-        tool_query_keyword: str,
-        observation_keyword: str,
-        thought_keyword: str,
-        final_keyword: str,
-        template: str,
-    ):
-        self.tool_keyword = tool_keyword
-        self.tool_query_keyword = tool_query_keyword
-        self.observation_keyword = observation_keyword
-        self.thought_keyword = thought_keyword
-        self.final_keyword = final_keyword
-        self.template = template
-
-
-class BaseAgent:
-    """AutoLLaMa Agent which controls the Action chain"""
-
-    summary_prefix = (
-        "When answering the question consider the following additional information:"
-    )
+class SummaryAgent:
+    """AutoLLaMa Agent which summarizes text"""
 
     def __init__(
         self,
         name: str,
-        prompt_template: PromptTemplate,
+        prompt_template: SummaryTemplate,
         llm: LLMInterface,
+        verbose: bool = False,
+    ):
+        self.name = name
+        self.prompt_template = prompt_template
+        self.llm = llm
+        self.verbose = verbose
+
+    def run(self, objective: str, text: str) -> tuple[AnswerType, str]:
+        print(f"> Running Agent: {self.name}")
+
+        prompt = self.prompt_template.template.format(objective=objective, text=text)
+
+        if self.verbose:
+            print("Prompting LLM: ----------")
+            print(prompt)
+
+        summary = self.llm.completion(prompt, temperature=0.8, max_new_tokens=400)
+
+        if self.verbose:
+            print("Response: ----------")
+            print(summary)
+
+        return (AnswerType.RESPONSE, summary)
+
+
+class ObjectiveAgent:
+    """ Agent which generates an simple objective from complex prompt """
+    
+    def __init__(
+        self,
+        name: str,
+        prompt_template: ObjectiveTemplate,
+        llm: LLMInterface,
+        verbose: bool = False
+    ):
+        self.name = name
+        self.prompt_template = prompt_template
+        self.llm = llm
+        self.verbose = verbose
+        
+    def run(self, text: str) -> tuple[AnswerType, str]:
+        print(f"> Running Agent: {self.name}")
+        
+        prompt = self.prompt_template.template.format(text=text)
+        
+        if self.verbose:
+            print("Prompting LLM: ----------")
+            print(prompt)
+            
+        objective = self.llm.completion(prompt, max_new_tokens=100)
+
+        if self.verbose:
+            print("Response: ----------")
+            print(objective)
+        
+        return (AnswerType.CHAT, objective)
+
+class ToolChainAgent:
+    """AutoLLaMa Agent which controls the Action chain"""
+
+    def __init__(
+        self,
+        name: str,
+        prompt_template: ToolChainTemplate,
+        llm: LLMInterface,
+        summary_agent: SummaryAgent,
         tools: list[BaseTool],
         verbose: bool = False,
     ):
@@ -73,6 +115,7 @@ class BaseAgent:
         self.prompt_template = prompt_template
         self.verbose = verbose
         self.llm = llm
+        self.summary_agent = summary_agent
         self.tools = tools
 
     def run(
@@ -93,7 +136,6 @@ class BaseAgent:
         print(f"> Running Agent: {self.name}")
 
         steps: list[ActionStep] = []
-        summarize_tool: SummarizeTool = SummarizeTool(self.llm)
 
         for i in range(max_iter):
             if self.verbose:
@@ -109,7 +151,7 @@ class BaseAgent:
             # Prompt LLM
             res = self.llm.completion(
                 prompt,
-                stopping_strings=[f"\n{self.prompt_template.observation_keyword}"]
+                stopping_strings=[f"\n{self.prompt_template.observation_keyword}"],
             )
 
             if self.verbose:
@@ -134,7 +176,7 @@ class BaseAgent:
 
             if do_summary:
                 print(f">>> Summarizing Results")
-                observation = summarize_tool.run(observation, step.action_query)
+                _, observation = self.summary_agent.run(step.action_query, observation)
 
             step.set_observation(observation)
 
@@ -144,7 +186,9 @@ class BaseAgent:
 
         return (
             AnswerType.CONTEXT,
-            summarize_tool.run("\n\n".join((step.observation for step in steps)), objective),
+            self.summary_agent.run(
+                objective, "\n\n".join((step.observation for step in steps))
+            )[1],
         )
 
     def _generate_prompt(self, objective: str, steps: list[ActionStep]) -> str:
