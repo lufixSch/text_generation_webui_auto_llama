@@ -346,7 +346,7 @@ def tool_tab():
         else shared.active_tools.remove(shared.tools[0].name),
         tool_choice[0],
         None,
-    ).then(lambda: print(f"{shared.active_tools}, {shared.tools[0].name}"), None, None)
+    )
 
     tool = shared.tools[1]
     tool_choice[1].change(
@@ -355,4 +355,4 @@ def tool_tab():
         else shared.active_tools.remove(shared.tools[1].name),
         tool_choice[1],
         None,
-    ).then(lambda: print(f"{shared.active_tools}, {shared.tools[1].name}"), None, None)
+    )
