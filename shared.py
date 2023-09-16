@@ -11,3 +11,5 @@ active_tools: set[str] = []
 
 llm: LLMInterface = None
 agents: dict[str, ToolChainAgent | SummaryAgent] = None
+
+active_agents: set[str] = []

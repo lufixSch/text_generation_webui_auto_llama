@@ -4,10 +4,10 @@ import gradio as gr
 import extensions.auto_llama.shared as shared
 
 from extensions.auto_llama.tool import WikipediaTool, DuckDuckGoSearchTool
-from extensions.auto_llama.agent import ToolChainAgent, SummaryAgent, ObjectiveAgent
+from extensions.auto_llama.agent import ToolChainAgent, SummaryAgent, ObjectiveAgent, AnswerType, is_active as agent_is_active
 from extensions.auto_llama.llm import OobaboogaLLM
 from extensions.auto_llama.config import load_templates, get_active_template
-from extensions.auto_llama.ui import tool_chain_agent_tab, tool_tab, summary_agent_tab
+from extensions.auto_llama.ui import tool_chain_agent_tab, tool_tab, summary_agent_tab, objective_agent_tab
 
 from modules import chat, extensions
 
@@ -18,21 +18,14 @@ params = {
     "api_endpoint": "http://localhost:5000",
     "verbose": True,
     "max_iter": 10,
-    "do_summary": True,
     "active_templates": {
         "ToolChainAgent": "default",
         "SummaryAgent": "default",
         "ObjectiveAgent": "default",
     },
     "active_tools": ["DuckDuckGo", "Wikipedia"],
+    "active_agents": ["ToolChainAgent", "SummaryAgent", "ObjectiveAgent"]
 }
-
-shared.templates = load_templates()
-shared.active_templates = params["active_templates"]
-
-shared.active_tools = set(params["active_tools"])
-
-shared.llm = OobaboogaLLM(params["api_endpoint"])
 
 
 def create_objective_agent():
@@ -66,7 +59,16 @@ def generate_objective(user_input: str, history: list[tuple[str, str]]):
     
     chat_messages += f"User: {user_input}"
     
-    return create_objective_agent().run(chat_messages)[1]
+    return create_objective_agent().run(chat_messages)
+
+def setup():
+    shared.templates = load_templates()
+    
+    shared.active_templates = params["active_templates"]
+    shared.active_tools = set(params["active_tools"])
+    shared.active_agents = set(params["active_agents"])
+
+    shared.llm = OobaboogaLLM(params["api_endpoint"])
 
 def ui():
     """
@@ -83,6 +85,7 @@ def ui():
         tool_tab()
         tool_chain_agent_tab()
         summary_agent_tab()
+        objective_agent_tab()
 
 
 def custom_generate_chat_prompt(user_input, state, **kwargs):
@@ -96,24 +99,39 @@ def custom_generate_chat_prompt(user_input, state, **kwargs):
 
         user_input = user_input.replace("/do", "").lstrip()
         
-        objective = generate_objective(user_input, state["history"]["visible"])
+        if agent_is_active('ObjectiveAgent'):
+            answer_type, objective = generate_objective(user_input, state["history"]["visible"])
+        else: 
+            objective = user_input
         
-        res = create_tool_chain_agent().run(
-            objective, max_iter=params["max_iter"], do_summary=params["do_summary"]
-        )
-
-        old_context = str(state["context"]).strip()
-        context_already_included = context_str in old_context
-
-        state["context"] = (
-            old_context
-            + (
-                "\n"
-                if context_already_included
-                else "\n\nYour reply should be based on this additional context:\n"
+        if agent_is_active('ToolChainAgent'):
+            answer_type, res = create_tool_chain_agent().run(
+                objective, max_iter=params["max_iter"], do_summary=agent_is_active('SummaryAgent')
             )
-            + res[1]
-        )
+        else:
+            res = objective
+
+        if answer_type == AnswerType.CONTEXT:
+            old_context = str(state["context"]).strip()
+            context_already_included = context_str in old_context
+
+            state["context"] = (
+                old_context
+                + (
+                    "\n"
+                    if context_already_included
+                    else "\n\nYour reply should be based on this additional context:\n"
+                )
+                + res[1]
+            )
+        elif answer_type == AnswerType.CHAT:
+            user_input = res
+        elif answer_type == AnswerType.IMG:
+            raise NotImplementedError("IMG AnswerType not implemented yet")
+        elif answer_type == AnswerType.RESPONSE:
+            raise NotImplementedError("RESPONSE AnswerType not implemented yet")
+        else:
+            raise ValueError(f"AnswerType {answer_type} not found")
 
     result = chat.generate_chat_prompt(user_input, state, **kwargs)
     return result

@@ -10,7 +10,11 @@ from extensions.auto_llama.tool import (
     NoneTool,
 )
 from extensions.auto_llama.templates import ToolChainTemplate, SummaryTemplate, ObjectiveTemplate
+import extensions.auto_llama.shared as shared
 
+
+def is_active(agent: str):
+    return agent in shared.active_agents
 
 class AgentError(Exception):
     """Action chain failed"""

@@ -1,8 +1,16 @@
 import gradio as gr
 
 import extensions.auto_llama.shared as shared
-from extensions.auto_llama.agent import ToolChainAgent, SummaryAgent
-from extensions.auto_llama.templates import ToolChainTemplate, SummaryTemplate
+from extensions.auto_llama.agent import (
+    ToolChainAgent,
+    SummaryAgent,
+    is_active as agent_is_active,
+)
+from extensions.auto_llama.templates import (
+    ToolChainTemplate,
+    SummaryTemplate,
+    ObjectiveTemplate,
+)
 from extensions.auto_llama.config import (
     load_templates,
     save_templates,
@@ -18,22 +26,30 @@ def activate_template(name: str, agent: str, keys: list[str]):
     shared.active_templates[agent] = name
 
     if len(keys) > 1:
-        return [gr.update(value=getattr(get_active_template(agent), key)) for key in keys]
-    
+        return [
+            gr.update(value=getattr(get_active_template(agent), key)) for key in keys
+        ]
+
     return gr.update(value=getattr(get_active_template(agent), keys[0]))
 
 
 def tool_chain_agent_tab():
     """Tab for updating/selecting prompt templates"""
 
+    AGENT_NAME = "ToolChainAgent"
+
     with gr.Tab("Tool Chain Agent"):
-        template = get_active_template("ToolChainAgent")
+        template = get_active_template(AGENT_NAME)
 
         template_textboxes: dict[str, gr.Textbox] = {}
 
+        agent_active_checkbox = gr.Checkbox(
+            value=agent_is_active(AGENT_NAME), label="Enable Agent"
+        )
+
         template_choice = gr.Dropdown(
-            choices=[name for name in shared.templates["ToolChainAgent"].keys()],
-            value=shared.active_templates["ToolChainAgent"],
+            choices=[name for name in shared.templates[AGENT_NAME].keys()],
+            value=shared.active_templates[AGENT_NAME],
             label="Active Template",
             interactive=True,
         )
@@ -59,70 +75,20 @@ def tool_chain_agent_tab():
             value=template.template, label="Template"
         )
 
-        save_btn = gr.Button(value="Save")
+        save_btn = gr.Button(value="Save Template")
         with gr.Row():
             template_name_txt = gr.Textbox(
                 placeholder="Name of the new template", show_label=False, max_lines=1
             )
-            create_btn = gr.Button(value="Create New", interactive=False)
+            create_btn = gr.Button(value="Create New Template", interactive=False)
 
-    # template_textboxes["tool_keyword"].change(
-    #     lambda txt: update_template(
-    #         shared.active_templates["ToolChainAgent"],
-    #         "ToolChainAgent",
-    #         "tool_keyword",
-    #         txt,
-    #     ),
-    #     template_textboxes["tool_keyword"],
-    #     None,
-    # )
-    # template_textboxes["tool_query_keyword"].change(
-    #     lambda txt: update_template(
-    #         shared.active_templates["ToolChainAgent"],
-    #         "ToolChainAgent",
-    #         "tool_query_keyword",
-    #         txt,
-    #     ),
-    #     template_textboxes["tool_query_keyword"],
-    #     None,
-    # )
-    # template_textboxes["observation_keyword"].change(
-    #     lambda txt: update_template(
-    #         shared.active_templates["ToolChainAgent"],
-    #         "ToolChainAgent",
-    #         "observation_keyword",
-    #         txt,
-    #     ),
-    #     template_textboxes["observation_keyword"],
-    #     None,
-    # )
-    # template_textboxes["thought_keyword"].change(
-    #     lambda txt: update_template(
-    #         shared.active_templates["ToolChainAgent"],
-    #         "ToolChainAgent",
-    #         "thought_keyword",
-    #         txt,
-    #     ),
-    #     template_textboxes["thought_keyword"],
-    #     None,
-    # )
-    # template_textboxes["final_keyword"].change(
-    #     lambda txt: update_template(
-    #         shared.active_templates["ToolChainAgent"],
-    #         "ToolChainAgent",
-    #         "final_keyword",
-    #         txt,
-    #     ),
-    #     template_textboxes["final_keyword"],
-    #     None,
-    # )
-    # template_textboxes["template"].change(
-    #     lambda txt: update_template(
-    #         shared.active_templates["ToolChainAgent"], "ToolChainAgent", "template", txt
-    #     ),
-    #     template_textboxes["template"],
-    #     None,
-    # )
+    agent_active_checkbox.change(
+        lambda enable: shared.active_agents.add(AGENT_NAME)
+        if enable
+        else shared.active_agents.remove(AGENT_NAME),
+        agent_active_checkbox,
+        None,
+    )
 
     template_name_txt.change(
         lambda txt: gr.update(interactive=True)
@@ -134,8 +100,8 @@ def tool_chain_agent_tab():
 
     save_btn.click(
         lambda tool_keyword, tool_query_keyword, observation_keyword, thought_keyword, final_keyword, template: create_template(
-            shared.active_templates["ToolChainAgent"],
-            "ToolChainAgent",
+            shared.active_templates[AGENT_NAME],
+            AGENT_NAME,
             ToolChainTemplate(
                 tool_keyword,
                 tool_query_keyword,
@@ -151,7 +117,7 @@ def tool_chain_agent_tab():
     create_btn.click(
         lambda name, tool_keyword, tool_query_keyword, observation_keyword, thought_keyword, final_keyword, template: create_template(
             name,
-            "ToolChainAgent",
+            AGENT_NAME,
             ToolChainTemplate(
                 tool_keyword,
                 tool_query_keyword,
@@ -167,16 +133,14 @@ def tool_chain_agent_tab():
         lambda: gr.update(value=""), None, template_name_txt
     ).then(
         lambda: gr.update(
-            choices=[name for name in shared.templates["ToolChainAgent"].keys()]
+            choices=[name for name in shared.templates[AGENT_NAME].keys()]
         ),
         None,
         template_choice,
     )
 
     template_choice.select(
-        lambda name: activate_template(
-            name, "ToolChainAgent", template_textboxes.keys()
-        ),
+        lambda name: activate_template(name, AGENT_NAME, template_textboxes.keys()),
         template_choice,
         [*template_textboxes.values()],
     )
@@ -185,14 +149,20 @@ def tool_chain_agent_tab():
 def summary_agent_tab():
     """Tab for personalizing settings for the summary Agent"""
 
+    AGENT_NAME = "SummaryAgent"
+
     with gr.Tab("Summary Agent"):
-        template = get_active_template("SummaryAgent")
+        template = get_active_template(AGENT_NAME)
 
         template_textboxes: dict[str, gr.Textbox] = {}
 
+        agent_active_checkbox = gr.Checkbox(
+            value=agent_is_active(AGENT_NAME), label="Enable Agent"
+        )
+
         template_choice = gr.Dropdown(
-            choices=[name for name in shared.templates["SummaryAgent"].keys()],
-            value=shared.active_templates["SummaryAgent"],
+            choices=[name for name in shared.templates[AGENT_NAME].keys()],
+            value=shared.active_templates[AGENT_NAME],
             label="Active Template",
             interactive=True,
         )
@@ -205,27 +175,20 @@ def summary_agent_tab():
             value=template.template, label="Template"
         )
 
-        save_btn = gr.Button(value="Save")
+        save_btn = gr.Button(value="Save Template")
         with gr.Row():
             template_name_txt = gr.Textbox(
                 placeholder="Name of the new template", show_label=False, max_lines=1
             )
-            create_btn = gr.Button(value="Create New", interactive=False)
+            create_btn = gr.Button(value="Create New Template", interactive=False)
 
-    # template_textboxes["prefix"].change(
-    #     lambda txt: update_template(
-    #         shared.active_templates["SummaryAgent"], "SummaryAgent", "prefix", txt
-    #     ),
-    #     template_textboxes["prefix"],
-    #     None
-    # )
-    # template_textboxes["template"].change(
-    #     lambda txt: update_template(
-    #         shared.active_templates["SummaryAgent"], "SummaryAgent", "template", txt
-    #     ),
-    #     template_textboxes["template"],
-    #     None,
-    # )
+    agent_active_checkbox.change(
+        lambda enable: shared.active_agents.add(AGENT_NAME)
+        if enable
+        else shared.active_agents.remove(AGENT_NAME),
+        agent_active_checkbox,
+        None,
+    )
 
     template_name_txt.change(
         lambda txt: gr.update(interactive=True)
@@ -237,8 +200,8 @@ def summary_agent_tab():
 
     save_btn.click(
         lambda prefix, template: create_template(
-            shared.active_templates["SummaryAgent"],
-            "SummaryAgent",
+            shared.active_templates[AGENT_NAME],
+            AGENT_NAME,
             SummaryTemplate(prefix, template),
         ),
         [*template_textboxes.values()],
@@ -247,7 +210,7 @@ def summary_agent_tab():
     create_btn.click(
         lambda name, prefix, template: create_template(
             name,
-            "SummaryAgent",
+            AGENT_NAME,
             SummaryTemplate(prefix, template),
         ),
         [template_name_txt, *template_textboxes.values()],
@@ -256,22 +219,100 @@ def summary_agent_tab():
         lambda: gr.update(value=""), None, template_name_txt
     ).then(
         lambda: gr.update(
-            choices=[name for name in shared.templates["SummaryAgent"].keys()]
+            choices=[name for name in shared.templates[AGENT_NAME].keys()]
         ),
         None,
         template_choice,
     )
 
     template_choice.select(
-        lambda name: activate_template(name, "SummaryAgent", template_textboxes.keys()),
+        lambda name: activate_template(name, AGENT_NAME, template_textboxes.keys()),
         template_choice,
         [*template_textboxes.values()],
     )
 
 
 def objective_agent_tab():
-    """Tab for personalizing settings for the summary Agent"""
-    
+    """Tab for personalizing settings for the ObjectiveAgent"""
+
+    AGENT_NAME = "ObjectiveAgent"
+
+    with gr.Tab("Objective Agent"):
+        template = get_active_template(AGENT_NAME)
+
+        template_textboxes: dict[str, gr.Textbox] = {}
+
+        agent_active_checkbox = gr.Checkbox(
+            value=agent_is_active(AGENT_NAME), label="Enable Agent"
+        )
+
+        template_choice = gr.Dropdown(
+            choices=[name for name in shared.templates[AGENT_NAME].keys()],
+            value=shared.active_templates[AGENT_NAME],
+            label="Active Template",
+            interactive=True,
+        )
+
+        template_textboxes["template"] = gr.TextArea(
+            value=template.template, label="Template"
+        )
+
+        save_btn = gr.Button(value="Save Template")
+        with gr.Row():
+            template_name_txt = gr.Textbox(
+                placeholder="Name of the new template", show_label=False, max_lines=1
+            )
+            create_btn = gr.Button(value="Create New Template", interactive=False)
+
+    agent_active_checkbox.change(
+        lambda enable: shared.active_agents.add(AGENT_NAME)
+        if enable
+        else shared.active_agents.remove(AGENT_NAME),
+        agent_active_checkbox,
+        None,
+    )
+
+    template_name_txt.change(
+        lambda txt: gr.update(interactive=True)
+        if txt != ""
+        else gr.update(interactive=False),
+        template_name_txt,
+        create_btn,
+    )
+
+    save_btn.click(
+        lambda template: create_template(
+            shared.active_templates[AGENT_NAME],
+            AGENT_NAME,
+            ObjectiveTemplate(template),
+        ),
+        [*template_textboxes.values()],
+        None,
+    ).then(lambda: save_templates(shared.templates), None, None)
+    create_btn.click(
+        lambda name, template: create_template(
+            name,
+            AGENT_NAME,
+            ObjectiveTemplate(prefix, template),
+        ),
+        [template_name_txt, *template_textboxes.values()],
+        None,
+    ).then(lambda: save_templates(shared.templates), None, None).then(
+        lambda: gr.update(value=""), None, template_name_txt
+    ).then(
+        lambda: gr.update(
+            choices=[name for name in shared.templates[AGENT_NAME].keys()]
+        ),
+        None,
+        template_choice,
+    )
+
+    template_choice.select(
+        lambda name: activate_template(name, AGENT_NAME, template_textboxes.keys()),
+        template_choice,
+        [*template_textboxes.values()],
+    )
+
 
 def tool_tab():
     """Tab for disabling/enabling tools"""
@@ -279,20 +320,39 @@ def tool_tab():
     tool_choice: list[gr.Checkbox] = []
 
     with gr.Tab("Tools"):
-        for tool in shared.tools:
-            checkbox = gr.Checkbox(
+        tool = shared.tools[0]
+        tool_choice.append(
+            gr.Checkbox(
                 value=tool.name in shared.active_tools,
                 label=tool.name,
-                interactive=False,
-                elem_id=tool.name,
+                interactive=True
             )
-            tool_choice.append(checkbox)
+        )
 
-    for i, tool in enumerate(shared.tools):
-        tool_choice[i].change(
-            lambda active: shared.active_tools.add(tool.name)
-            if active
-            else shared.active_tools.remove(tool.name),
-            checkbox,
-            None,
-        ).then(lambda: print(shared.active_tools)).then(lambda: print(tool.name))
+        tool = shared.tools[1]
+        tool_choice.append(
+            gr.Checkbox(
+                value=tool.name in shared.active_tools,
+                label=tool.name,
+                interactive=True
+            )
+        )
+        
+
+    tool = shared.tools[0]
+    tool_choice[0].change(
+        lambda active: shared.active_tools.add(shared.tools[0].name)
+        if active
+        else shared.active_tools.remove(shared.tools[0].name),
+        tool_choice[0],
+        None,
+    ).then(lambda: print(f"{shared.active_tools}, {shared.tools[0].name}"), None, None)
+
+    tool = shared.tools[1]
+    tool_choice[1].change(
+        lambda active: shared.active_tools.add(shared.tools[1].name)
+        if active
+        else shared.active_tools.remove(shared.tools[1].name),
+        tool_choice[1],
+        None,
+    ).then(lambda: print(f"{shared.active_tools}, {shared.tools[1].name}"), None, None)
