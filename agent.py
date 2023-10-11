@@ -9,12 +9,17 @@ from extensions.auto_llama.tool import (
     FinalStep,
     NoneTool,
 )
-from extensions.auto_llama.templates import ToolChainTemplate, SummaryTemplate, ObjectiveTemplate
+from extensions.auto_llama.templates import (
+    ToolChainTemplate,
+    SummaryTemplate,
+    ObjectiveTemplate,
+)
 import extensions.auto_llama.shared as shared
 
 
 def is_active(agent: str):
     return agent in shared.active_agents
+
 
 class AgentError(Exception):
     """Action chain failed"""
@@ -72,36 +77,44 @@ class SummaryAgent:
 
 
 class ObjectiveAgent:
-    """ Agent which generates an simple objective from complex prompt """
-    
+    """Agent which generates an simple objective from complex prompt"""
+
     def __init__(
         self,
         name: str,
         prompt_template: ObjectiveTemplate,
         llm: LLMInterface,
-        verbose: bool = False
+        tools: list[BaseTool],
+        verbose: bool = False,
     ):
         self.name = name
         self.prompt_template = prompt_template
         self.llm = llm
+        self.tools = tools
         self.verbose = verbose
-        
+
     def run(self, text: str) -> tuple[AnswerType, str]:
         print(f"> Running Agent: {self.name}")
-        
-        prompt = self.prompt_template.template.format(text=text)
-        
+
+        prompt = self.prompt_template.template.format(
+            text=text,
+            tools="\n".join(
+                [f"{tool.keywords[0]}: {tool.description}" for tool in self.tools]
+            ),
+        )
+
         if self.verbose:
             print("Prompting LLM: ----------")
             print(prompt)
-            
+
         objective = self.llm.completion(prompt, max_new_tokens=100)
 
         if self.verbose:
             print("Response: ----------")
             print(objective)
-        
+
         return (AnswerType.CHAT, objective)
+
 
 class ToolChainAgent:
     """AutoLLaMa Agent which controls the Action chain"""

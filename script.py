@@ -4,10 +4,21 @@ import gradio as gr
 import extensions.auto_llama.shared as shared
 
 from extensions.auto_llama.tool import WikipediaTool, DuckDuckGoSearchTool
-from extensions.auto_llama.agent import ToolChainAgent, SummaryAgent, ObjectiveAgent, AnswerType, is_active as agent_is_active
+from extensions.auto_llama.agent import (
+    ToolChainAgent,
+    SummaryAgent,
+    ObjectiveAgent,
+    AnswerType,
+    is_active as agent_is_active,
+)
 from extensions.auto_llama.llm import OobaboogaLLM
 from extensions.auto_llama.config import load_templates, get_active_template
-from extensions.auto_llama.ui import tool_chain_agent_tab, tool_tab, summary_agent_tab, objective_agent_tab
+from extensions.auto_llama.ui import (
+    tool_chain_agent_tab,
+    tool_tab,
+    summary_agent_tab,
+    objective_agent_tab,
+)
 
 from modules import chat, extensions
 
@@ -24,7 +35,7 @@ params = {
         "ObjectiveAgent": "default",
     },
     "active_tools": ["DuckDuckGo", "Wikipedia"],
-    "active_agents": ["ToolChainAgent", "SummaryAgent", "ObjectiveAgent"]
+    "active_agents": ["ToolChainAgent", "SummaryAgent", "ObjectiveAgent"],
 }
 
 
@@ -33,8 +44,10 @@ def create_objective_agent():
         "ObjectiveAgent",
         get_active_template("ObjectiveAgent"),
         shared.llm,
-        verbose=params["verbose"]
+        [tool for tool in shared.tools if tool.name in shared.active_tools],
+        verbose=params["verbose"],
     )
+
 
 def create_tool_chain_agent():
     return ToolChainAgent(
@@ -50,36 +63,34 @@ def create_tool_chain_agent():
         [tool for tool in shared.tools if tool.name in shared.active_tools],
         verbose=params["verbose"],
     )
-    
+
+
 def generate_objective(user_input: str, history: list[tuple[str, str]]):
     chat_messages = ""
     for message, reply in history:
         chat_messages += f"User: {message}\n" if message else ""
         chat_messages += f"Chatbot: {reply}\n" if reply else ""
-    
+
     chat_messages += f"User: {user_input}"
-    
+
     return create_objective_agent().run(chat_messages)
+
 
 def setup():
     shared.templates = load_templates()
-    
+
     shared.active_templates = params["active_templates"]
     shared.active_tools = set(params["active_tools"])
     shared.active_agents = set(params["active_agents"])
 
     shared.llm = OobaboogaLLM(params["api_endpoint"])
 
+
 def ui():
     """
     Gets executed when the UI is drawn. Custom gradio elements and
     their corresponding event handlers should be defined here.
     """
-
-    # with gr.Box(visible=False, elem_classes="file-saver") as file_saver:
-    #    with gr.Row():
-    #        template_name_txt = gr.Textbox(value=active_template, label="Template Name")
-    #        save_new_btn = gr.Button(value="Save")
 
     with gr.Accordion("AutoLLaMa", open=False):
         tool_tab()
@@ -98,15 +109,19 @@ def custom_generate_chat_prompt(user_input, state, **kwargs):
         context_str = "Your reply should be based on this additional context:"
 
         user_input = user_input.replace("/do", "").lstrip()
-        
-        if agent_is_active('ObjectiveAgent'):
-            answer_type, objective = generate_objective(user_input, state["history"]["visible"])
-        else: 
+
+        if agent_is_active("ObjectiveAgent"):
+            answer_type, objective = generate_objective(
+                user_input, state["history"]["visible"]
+            )
+        else:
             objective = user_input
-        
-        if agent_is_active('ToolChainAgent'):
+
+        if agent_is_active("ToolChainAgent"):
             answer_type, res = create_tool_chain_agent().run(
-                objective, max_iter=params["max_iter"], do_summary=agent_is_active('SummaryAgent')
+                objective,
+                max_iter=params["max_iter"],
+                do_summary=agent_is_active("SummaryAgent"),
             )
         else:
             res = objective
@@ -122,7 +137,8 @@ def custom_generate_chat_prompt(user_input, state, **kwargs):
                     if context_already_included
                     else "\n\nYour reply should be based on this additional context:\n"
                 )
-                + res[1]
+                + res
+                + "\n"
             )
         elif answer_type == AnswerType.CHAT:
             user_input = res

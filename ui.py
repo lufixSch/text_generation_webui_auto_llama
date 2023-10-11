@@ -140,7 +140,7 @@ def tool_chain_agent_tab():
     )
 
     template_choice.select(
-        lambda name: activate_template(name, AGENT_NAME, template_textboxes.keys()),
+        lambda name: activate_template(name, AGENT_NAME, list(template_textboxes.keys())),
         template_choice,
         [*template_textboxes.values()],
     )
@@ -226,7 +226,7 @@ def summary_agent_tab():
     )
 
     template_choice.select(
-        lambda name: activate_template(name, AGENT_NAME, template_textboxes.keys()),
+        lambda name: activate_template(name, AGENT_NAME, list(template_textboxes.keys())),
         template_choice,
         [*template_textboxes.values()],
     )
@@ -293,7 +293,7 @@ def objective_agent_tab():
         lambda name, template: create_template(
             name,
             AGENT_NAME,
-            ObjectiveTemplate(prefix, template),
+            ObjectiveTemplate(template),
         ),
         [template_name_txt, *template_textboxes.values()],
         None,
@@ -308,7 +308,7 @@ def objective_agent_tab():
     )
 
     template_choice.select(
-        lambda name: activate_template(name, AGENT_NAME, template_textboxes.keys()),
+        lambda name: activate_template(name, AGENT_NAME, list(template_textboxes.keys())),
         template_choice,
         [*template_textboxes.values()],
     )
@@ -337,7 +337,7 @@ def tool_tab():
                 interactive=True
             )
         )
-        
+
 
     tool = shared.tools[0]
     tool_choice[0].change(
