@@ -1,4 +1,3 @@
-
 class ToolChainTemplate:
     """Prompt template information for the ToolChainAgent"""
 
@@ -17,11 +16,11 @@ class ToolChainTemplate:
         self.thought_keyword = thought_keyword
         self.final_keyword = final_keyword
         self.template = template
-        
+
 
 class SummaryTemplate:
-    """ Prompt template information for the SummaryAgent """
-    
+    """Prompt template information for the SummaryAgent"""
+
     def __init__(
         self,
         prefix: str,
@@ -29,13 +28,17 @@ class SummaryTemplate:
     ):
         self.prefix = prefix
         self.template = template
-        
+
 
 class ObjectiveTemplate:
-    """ Prompt template information for the ObjectiveAgent """
-    
-    def __init__(
-        self,
-        template: str
-    ):
+    """Prompt template information for the ObjectiveAgent"""
+
+    def __init__(self, template: str):
+        self.template = template
+
+
+class CodeTemplate:
+    """Prompt template information for the CodeAgent"""
+
+    def __init__(self, template: str) -> None:
         self.template = template

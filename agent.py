@@ -1,6 +1,8 @@
-import re
+import re, os
+import pandas as pd
 
 from enum import Enum
+from requests import post
 
 from extensions.auto_llama.llm import LLMInterface
 from extensions.auto_llama.tool import (
@@ -13,6 +15,7 @@ from extensions.auto_llama.templates import (
     ToolChainTemplate,
     SummaryTemplate,
     ObjectiveTemplate,
+    CodeTemplate,
 )
 import extensions.auto_llama.shared as shared
 
@@ -74,6 +77,134 @@ class SummaryAgent:
             print(summary)
 
         return (AnswerType.RESPONSE, summary)
+
+
+class CodeAgent:
+    """Agent which is able to execute code"""
+
+    DATA_PATH = os.path.join("code_exec", "files")
+    allowed_filetypes = ["csv"]
+    allowed_languages = ["python"]
+
+    def __init__(
+        self,
+        name: str,
+        prompt_template: CodeTemplate,
+        llm: LLMInterface,
+        pkg: list[str],
+        executor_endpoint: str = "http://localhost:6000",
+        verbose: bool = False,
+    ) -> None:
+        self.name = name
+        self.prompt_template = prompt_template
+        self.llm = llm
+        self.pkg = pkg
+        self.data: dict[str, str] = {}
+        self.executor_endpoint = executor_endpoint
+        self.verbose = verbose
+
+    def add_data(self, path: str):
+        """Add data (.csv or similar) to the code executor"""
+
+        basename = os.path.basename(path)
+        file_type = basename.split(".")[-1].lower()
+
+        if file_type not in self.allowed_filetypes:
+            raise ValueError(f"Unsupported file type {file_type}")
+
+        self.data[basename] = file_type
+
+        # TODO: Move file into data folder of the container
+
+    def add_pkg(self, *packages: str):
+        """Extend list of usable python packages"""
+
+        self.pkg.extend(packages)
+
+        # TODO: Add to requirements.txt and install in container
+
+    def _generate_file_prompt(self, file: tuple[str, str]):
+        """Generate prompt for file with example"""
+
+        prompt = f"{file[0]}:"
+
+        if file[1] == "csv":
+            df = pd.read_csv(file[0])
+
+            # Load header and data types of each column in the csv
+            cols = [f"{col}: {df[col].dtype}" for col in df.columns]
+
+            prompt += " | ".join(cols)
+            return prompt
+
+    def _extract_code(self, text: str):
+        """Extract code from llm response"""
+
+        pattern = r"```(?P<language>.*)\n(?P<code>[^`]*)\n```"
+
+        match = re.search(pattern, text)
+
+        if match is None:
+            raise ValueError("No code found in response")
+
+        language = match.group("language")
+        code = match.group("code").strip()
+
+        return (language, code)
+
+    def _execute_code(self, code: str):
+        """Execute code in sandboxed environment and return output"""
+
+        res = post(self.executor_endpoint, json={"code": code})
+
+        if res.status_code != 200:
+            raise AgentError("Failed to execute code")
+
+        res_dict = res.json()
+
+        return (res_dict["response"], res_dict["images"])
+
+    def run(self, objective: str) -> list[tuple[AnswerType, str]]:
+        print(f"> Running Agent: {self.name}")
+
+        prompt = self.prompt_template.template.format(
+            objective=objective,
+            files="\n".join(
+                [self._generate_file_prompt(file) for file in self.data.items()]
+            ),
+            packages=", ".join(self.pkg),
+        )
+
+        if self.verbose:
+            print("Prompting LLM: ----------")
+            print(prompt)
+
+        result = self.llm.completion(prompt, max_new_tokens=800)
+
+        if self.verbose:
+            print("Response: ----------")
+            print(result)
+
+        try:
+            lang, code = self._extract_code(result)
+        except ValueError:
+            return [(AnswerType.CONTEXT, "No valid code found in response")]
+
+        if lang not in self.allowed_languages:
+            return [(AnswerType.CONTEXT, f"Unsupported language {lang}")]
+
+        try:
+            output, images = self._execute_code(code)
+        except AgentError:
+            return [(AnswerType.CONTEXT, "Failed to execute code")]
+
+        return [
+            (AnswerType.CONTEXT, output),
+            *[
+                (AnswerType.IMG, f"{self.executor_endpoint}/image/{img}")
+                for img in images
+            ],
+        ]
 
 
 class ObjectiveAgent:

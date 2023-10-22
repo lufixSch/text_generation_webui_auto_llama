@@ -8,6 +8,7 @@ active_templates: dict[str, str] = {}
 
 tools: list[BaseTool] = [WikipediaTool(max_articles=2), DuckDuckGoSearchTool(max_results=10)]
 active_tools: set[str] = []
+allowed_packages: set[str] = []
 
 llm: LLMInterface = None
 agents: dict[str, ToolChainAgent | SummaryAgent] = None
