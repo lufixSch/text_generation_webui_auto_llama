@@ -9,6 +9,7 @@ from extensions.auto_llama.agent import (
     SummaryAgent,
     ObjectiveAgent,
     AnswerType,
+    CodeAgent,
     is_active as agent_is_active,
 )
 from extensions.auto_llama.llm import OobaboogaLLM
@@ -33,9 +34,11 @@ params = {
         "ToolChainAgent": "default",
         "SummaryAgent": "default",
         "ObjectiveAgent": "default",
+        "CodeAgent": "default",
     },
     "active_tools": ["DuckDuckGo", "Wikipedia"],
     "active_agents": ["ToolChainAgent", "SummaryAgent", "ObjectiveAgent"],
+    "allowed_packages": ["numpy", "pandas", "matplotlib"],
 }
 
 
@@ -65,6 +68,16 @@ def create_tool_chain_agent():
     )
 
 
+def create_code_agent():
+    return CodeAgent(
+        "CodeAgent",
+        get_active_template("CodeAgent"),
+        shared.llm,
+        shared.allowed_packages,
+        verbose=params["verbose"],
+    )
+
+
 def generate_objective(user_input: str, history: list[tuple[str, str]]):
     chat_messages = ""
     for message, reply in history:
@@ -82,6 +95,7 @@ def setup():
     shared.active_templates = params["active_templates"]
     shared.active_tools = set(params["active_tools"])
     shared.active_agents = set(params["active_agents"])
+    shared.allowed_packages = set(params["allowed_packages"])
 
     shared.llm = OobaboogaLLM(params["api_endpoint"])
 
@@ -97,6 +111,26 @@ def ui():
         tool_chain_agent_tab()
         summary_agent_tab()
         objective_agent_tab()
+
+
+def output_modifier(string, state, is_chat=False) -> str:
+    """
+    Modifies the LLM output before it gets presented.
+
+    In chat mode, the modified version goes into history['visible'],
+    and the original version goes into history['internal'].
+    """
+
+    for answer_type, response in shared.response_modifier:
+        string += (
+            "\n " + response
+            if answer_type is AnswerType.RESPONSE
+            else f"<img src='{response}' />"
+        )
+
+    shared.response_modifier = []  # clear the modifier list after use
+
+    return string
 
 
 def custom_generate_chat_prompt(user_input, state, **kwargs):
@@ -143,11 +177,32 @@ def custom_generate_chat_prompt(user_input, state, **kwargs):
         elif answer_type == AnswerType.CHAT:
             user_input = res
         elif answer_type == AnswerType.IMG:
-            raise NotImplementedError("IMG AnswerType not implemented yet")
+            shared.response_modifier.append((answer_type, res))
         elif answer_type == AnswerType.RESPONSE:
-            raise NotImplementedError("RESPONSE AnswerType not implemented yet")
+            shared.response_modifier.append((answer_type, res))
         else:
             raise ValueError(f"AnswerType {answer_type} not found")
+
+    elif user_input.startswith("/code"):
+        chat_context_string = """```
+{code}
+```
+
+This code generated the following output: {output}
+Give a brief description of the code and summarize its ouput.
+"""
+
+        user_input = user_input.replace("/code", "").lstrip()
+
+        answers = create_code_agent().run(user_input)
+
+        if len(answers) <= 1:
+            user_input = chat_context_string.format(code="", output=answers[0][1])
+
+        user_input = chat_context_string.format(
+            code=answers[0][1], output=answers[1][1]
+        )
+        shared.response_modifier.extend(answers[2:])
 
     result = chat.generate_chat_prompt(user_input, state, **kwargs)
     return result

@@ -42,6 +42,9 @@ class AnswerType(Enum):
     CHAT = "chat"
     """ Text based result which should be added to the user input """
 
+    PROMPT = "prompt"
+    """ Text based result which replaces the current prompt in the chat"""
+
     RESPONSE = "response"
     """ Text based result which should be added to the response """
 
@@ -49,34 +52,36 @@ class AnswerType(Enum):
 class SummaryAgent:
     """AutoLLaMa Agent which summarizes text"""
 
-    def __init__(
-        self,
-        name: str,
-        prompt_template: SummaryTemplate,
-        llm: LLMInterface,
-        verbose: bool = False,
-    ):
-        self.name = name
-        self.prompt_template = prompt_template
-        self.llm = llm
-        self.verbose = verbose
 
-    def run(self, objective: str, text: str) -> tuple[AnswerType, str]:
-        print(f"> Running Agent: {self.name}")
+def __init__(
+    self,
+    name: str,
+    prompt_template: SummaryTemplate,
+    llm: LLMInterface,
+    verbose: bool = False,
+):
+    self.name = name
+    self.prompt_template = prompt_template
+    self.llm = llm
+    self.verbose = verbose
 
-        prompt = self.prompt_template.template.format(objective=objective, text=text)
 
-        if self.verbose:
-            print("Prompting LLM: ----------")
-            print(prompt)
+def run(self, objective: str, text: str) -> tuple[AnswerType, str]:
+    print(f"> Running Agent: {self.name}")
 
-        summary = self.llm.completion(prompt, temperature=0.8, max_new_tokens=400)
+    prompt = self.prompt_template.template.format(objective=objective, text=text)
 
-        if self.verbose:
-            print("Response: ----------")
-            print(summary)
+    if self.verbose:
+        print("Prompting LLM: ----------")
+        print(prompt)
 
-        return (AnswerType.RESPONSE, summary)
+    summary = self.llm.completion(prompt, temperature=0.8, max_new_tokens=400)
+
+    if self.verbose:
+        print("Response: ----------")
+        print(summary)
+
+    return (AnswerType.RESPONSE, summary)
 
 
 class CodeAgent:
@@ -186,20 +191,21 @@ class CodeAgent:
             print(result)
 
         try:
-            lang, code = self._extract_code(result)
+            lang, code = self._extract_code(prompt + result)
         except ValueError:
-            return [(AnswerType.CONTEXT, "No valid code found in response")]
+            return [(AnswerType.CHAT, "No valid code found in response")]
 
         if lang not in self.allowed_languages:
-            return [(AnswerType.CONTEXT, f"Unsupported language {lang}")]
+            return [(AnswerType.CHAT, code), (AnswerType.CHAT, f"Unsupported language {lang}")]
 
         try:
             output, images = self._execute_code(code)
         except AgentError:
-            return [(AnswerType.CONTEXT, "Failed to execute code")]
+            return [(AnswerType.CHAT, code), (AnswerType.CHAT, "Failed to execute code")]
 
         return [
-            (AnswerType.CONTEXT, output),
+            (AnswerType.CHAT, code),
+            (AnswerType.CHAT, output),
             *[
                 (AnswerType.IMG, f"{self.executor_endpoint}/image/{img}")
                 for img in images

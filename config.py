@@ -1,7 +1,7 @@
 import os, json
 
 import extensions.auto_llama.shared as shared
-from extensions.auto_llama.templates import ToolChainTemplate, SummaryTemplate, ObjectiveTemplate
+from extensions.auto_llama.templates import ToolChainTemplate, SummaryTemplate, ObjectiveTemplate, CodeTemplate
 
 _BASE_PATH = os.path.dirname(os.path.abspath(__file__))
 
@@ -45,6 +45,10 @@ def load_templates() -> dict[str, dict[ToolChainTemplate | SummaryTemplate | Obj
             key: ObjectiveTemplate(**vals)
             for key, vals in template_dict["ObjectiveAgent"].items()
         },
+        "CodeAgent": {
+            key: CodeTemplate(**vals)
+            for key, vals in template_dict['CodeAgent'].items()
+        }
     }
 
 
