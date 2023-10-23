@@ -22,11 +22,11 @@ class CodeExecutor:
 
         for line in code.splitlines():
             if "plt.show(" in line:
-                id = uuid4().hex
+                id = f"{uuid4().hex}.png"
                 formatted_code += (
                     re.sub(
                         r"plt\.show\(\)",
-                        f'plt.savefig("{self.image_path}/{id}.png")',
+                        f'plt.savefig("{self.image_path}/{id}")',
                         line,
                     )
                     + "\n"

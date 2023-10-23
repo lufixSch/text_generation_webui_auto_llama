@@ -17,9 +17,9 @@ else:
     logger.setLevel(logging.DEBUG)
 
 
-IMAGE_PATH = "images"
-DATA_PATH = "data"
-CODE_PATH = "code"
+IMAGE_PATH = "static/images"
+DATA_PATH = "static/files"
+CODE_PATH = "static/code"
 
 code_exec = CodeExecutor(DATA_PATH, IMAGE_PATH, CODE_PATH)
 
@@ -49,8 +49,7 @@ def list_images():
     """
 
     image_list = [
-        os.path.basename(image).rstrip(".png")
-        for image in iglob(os.path.join(IMAGE_PATH, "*.png"))
+        os.path.basename(image) for image in iglob(os.path.join(IMAGE_PATH, "*.png"))
     ]
     deleted = False
 
@@ -74,7 +73,7 @@ def serve_image(id: str):
     Serve image file based on the given id
     """
 
-    return send_file(os.path.join(IMAGE_PATH, f"{id}.png"), mimetype="image/png")
+    return send_file(os.path.join(IMAGE_PATH, f"{id}"), mimetype="image/png")
 
 
 @app.route("/code", methods=["GET", "DELETE"])

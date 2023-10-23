@@ -74,6 +74,7 @@ def create_code_agent():
         get_active_template("CodeAgent"),
         shared.llm,
         shared.allowed_packages,
+        executor_endpoint="http://localhost:6060",
         verbose=params["verbose"],
     )
 
@@ -189,7 +190,7 @@ def custom_generate_chat_prompt(user_input, state, **kwargs):
 ```
 
 This code generated the following output: {output}
-Give a brief description of the code and summarize its ouput.
+Give a brief description of what the code does and summarize its ouput.
 """
 
         user_input = user_input.replace("/code", "").lstrip()

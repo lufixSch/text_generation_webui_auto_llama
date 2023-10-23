@@ -207,7 +207,7 @@ class CodeAgent:
             (AnswerType.CHAT, code),
             (AnswerType.CHAT, output),
             *[
-                (AnswerType.IMG, f"{self.executor_endpoint}/image/{img}")
+                (AnswerType.IMG, f"{self.executor_endpoint}/static/images/{img}")
                 for img in images
             ],
         ]

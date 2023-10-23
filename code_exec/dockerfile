@@ -2,7 +2,7 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-RUN mkdir images && mkdir data && mkdir code
+#RUN mkdir images && mkdir data && mkdir code
 
 COPY requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
