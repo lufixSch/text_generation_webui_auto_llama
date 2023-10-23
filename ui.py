@@ -1,4 +1,5 @@
 import gradio as gr
+import tempfile
 
 import extensions.auto_llama.shared as shared
 from extensions.auto_llama.agent import (
@@ -10,6 +11,7 @@ from extensions.auto_llama.templates import (
     ToolChainTemplate,
     SummaryTemplate,
     ObjectiveTemplate,
+    CodeTemplate,
 )
 from extensions.auto_llama.config import (
     load_templates,
@@ -140,7 +142,9 @@ def tool_chain_agent_tab():
     )
 
     template_choice.select(
-        lambda name: activate_template(name, AGENT_NAME, list(template_textboxes.keys())),
+        lambda name: activate_template(
+            name, AGENT_NAME, list(template_textboxes.keys())
+        ),
         template_choice,
         [*template_textboxes.values()],
     )
@@ -226,10 +230,104 @@ def summary_agent_tab():
     )
 
     template_choice.select(
-        lambda name: activate_template(name, AGENT_NAME, list(template_textboxes.keys())),
+        lambda name: activate_template(
+            name, AGENT_NAME, list(template_textboxes.keys())
+        ),
         template_choice,
         [*template_textboxes.values()],
     )
+
+
+def code_agent_tab():
+    """Tab for personalizing settings for the Code Agent"""
+
+    AGENT_NAME = "CodeAgent"
+
+    with gr.Tab("Code Agent"):
+        template = get_active_template(AGENT_NAME)
+
+        template_textboxes: dict[str, gr.Textbox] = {}
+
+        agent_active_checkbox = gr.Checkbox(
+            value=agent_is_active(AGENT_NAME), label="Enable Agent", interactive=False
+        )
+
+        template_choice = gr.Dropdown(
+            choices=[name for name in shared.templates[AGENT_NAME].keys()],
+            value=shared.active_templates[AGENT_NAME],
+            label="Active Template",
+            interactive=True,
+        )
+
+        template_textboxes["template"] = gr.TextArea(
+            value=template.template, label="Template"
+        )
+
+        save_btn = gr.Button(value="Save Template")
+        with gr.Row():
+            template_name_txt = gr.Textbox(
+                placeholder="Name of the new template", show_label=False, max_lines=1
+            )
+            create_btn = gr.Button(value="Create New Template", interactive=False)
+
+        with gr.Group():
+            file_exp = gr.File(file_count="multiple", label="Upload files")
+
+    agent_active_checkbox.change(
+        lambda enable: shared.active_agents.add(AGENT_NAME)
+        if enable
+        else shared.active_agents.remove(AGENT_NAME),
+        agent_active_checkbox,
+        None,
+    )
+
+    template_name_txt.change(
+        lambda txt: gr.update(interactive=True)
+        if txt != ""
+        else gr.update(interactive=False),
+        template_name_txt,
+        create_btn,
+    )
+
+    save_btn.click(
+        lambda template: create_template(
+            shared.active_templates[AGENT_NAME],
+            AGENT_NAME,
+            CodeTemplate(template),
+        ),
+        [*template_textboxes.values()],
+        None,
+    ).then(lambda: save_templates(shared.templates), None, None)
+    create_btn.click(
+        lambda name, template: create_template(
+            name,
+            AGENT_NAME,
+            CodeTemplate(template),
+        ),
+        [template_name_txt, *template_textboxes.values()],
+        None,
+    ).then(lambda: save_templates(shared.templates), None, None).then(
+        lambda: gr.update(value=""), None, template_name_txt
+    ).then(
+        lambda: gr.update(
+            choices=[name for name in shared.templates[AGENT_NAME].keys()]
+        ),
+        None,
+        template_choice,
+    )
+
+    template_choice.select(
+        lambda name: activate_template(
+            name, AGENT_NAME, list(template_textboxes.keys())
+        ),
+        template_choice,
+        [*template_textboxes.values()],
+    )
+
+    file_exp.upload(
+        lambda files: shared.code_agent.add_data(*[file.name for file in files]),
+        file_exp,
+    ).then(lambda: None, None, file_exp)
 
 
 def objective_agent_tab():
@@ -308,7 +406,9 @@ def objective_agent_tab():
     )
 
     template_choice.select(
-        lambda name: activate_template(name, AGENT_NAME, list(template_textboxes.keys())),
+        lambda name: activate_template(
+            name, AGENT_NAME, list(template_textboxes.keys())
+        ),
         template_choice,
         [*template_textboxes.values()],
     )
@@ -325,7 +425,7 @@ def tool_tab():
             gr.Checkbox(
                 value=tool.name in shared.active_tools,
                 label=tool.name,
-                interactive=True
+                interactive=True,
             )
         )
 
@@ -334,10 +434,9 @@ def tool_tab():
             gr.Checkbox(
                 value=tool.name in shared.active_tools,
                 label=tool.name,
-                interactive=True
+                interactive=True,
             )
         )
-
 
     tool = shared.tools[0]
     tool_choice[0].change(

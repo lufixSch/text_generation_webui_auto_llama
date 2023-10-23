@@ -1,4 +1,7 @@
-import re, os
+import re
+import os
+import docker
+from docker import errors as docker_errors
 import pandas as pd
 
 from enum import Enum
@@ -97,7 +100,7 @@ class CodeAgent:
         prompt_template: CodeTemplate,
         llm: LLMInterface,
         pkg: list[str],
-        executor_endpoint: str = "http://localhost:6000",
+        executor_port: int = 6000,
         verbose: bool = False,
     ) -> None:
         self.name = name
@@ -105,21 +108,67 @@ class CodeAgent:
         self.llm = llm
         self.pkg = pkg
         self.data: dict[str, str] = {}
-        self.executor_endpoint = executor_endpoint
+        self.executor_endpoint = f"http://localhost:{executor_port}"
         self.verbose = verbose
 
-    def add_data(self, path: str):
+        self._mount_container(executor_port)
+
+    def _mount_container(self, port: int):
+        """Build docker image and mount container if it doesn't run already"""
+
+        self.container_name = f"{self.name.lower()}_sandbox"
+
+        try:
+            container = shared.docker_client.containers.get(self.container_name)
+            if container.status == "running":
+                print(f"Container for {self.name} already running")
+                return
+
+            container.remove()
+        except docker_errors.NotFound:
+            pass
+
+        print(f"Creating Docker Container for {self.name}")
+        print("... This might take a while ...")
+
+        path = os.path.abspath(os.path.join(os.path.dirname(__file__), "code_exec"))
+
+        if self.verbose:
+            print("> Building Docker Image")
+            print(f"{path}, {self.container_name}")
+
+        shared.docker_client.images.build(path=path, tag=self.container_name)
+
+        if self.verbose:
+            print("> Image built successfully!")
+
+        if self.verbose:
+            print("> Starting Docker Container")
+
+        shared.docker_client.containers.run(
+            self.container_name,
+            ports={5000: port},
+            name=self.container_name,
+            detach=True,
+        )
+
+        print(f"> Code executor is running on {self.executor_endpoint}")
+
+    def add_data(self, *paths: str):
         """Add data (.csv or similar) to the code executor"""
 
-        basename = os.path.basename(path)
-        file_type = basename.split(".")[-1].lower()
+        for path in paths:
+            basename = os.path.basename(path)
+            file_type = basename.split(".")[-1].lower()
 
-        if file_type not in self.allowed_filetypes:
-            raise ValueError(f"Unsupported file type {file_type}")
+            if file_type not in self.allowed_filetypes:
+                raise ValueError(f"Unsupported file type {file_type}")
 
-        self.data[basename] = file_type
+            self.data[basename] = file_type
 
-        # TODO: Move file into data folder of the container
+            # TODO: Move file into data folder of the container
+
+        print(self.data)
 
     def add_pkg(self, *packages: str):
         """Extend list of usable python packages"""
@@ -196,12 +245,18 @@ class CodeAgent:
             return [(AnswerType.CHAT, "No valid code found in response")]
 
         if lang not in self.allowed_languages:
-            return [(AnswerType.CHAT, code), (AnswerType.CHAT, f"Unsupported language {lang}")]
+            return [
+                (AnswerType.CHAT, code),
+                (AnswerType.CHAT, f"Unsupported language {lang}"),
+            ]
 
         try:
             output, images = self._execute_code(code)
         except AgentError:
-            return [(AnswerType.CHAT, code), (AnswerType.CHAT, "Failed to execute code")]
+            return [
+                (AnswerType.CHAT, code),
+                (AnswerType.CHAT, "Failed to execute code"),
+            ]
 
         return [
             (AnswerType.CHAT, code),
@@ -211,6 +266,13 @@ class CodeAgent:
                 for img in images
             ],
         ]
+
+    def __del__(self):
+        try:
+            container = shared.docker_client.containers.get(self.container_name)
+            container.kill()
+        except docker_errors.NotFound:
+            pass
 
 
 class ObjectiveAgent:

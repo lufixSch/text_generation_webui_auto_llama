@@ -19,6 +19,7 @@ from extensions.auto_llama.ui import (
     tool_tab,
     summary_agent_tab,
     objective_agent_tab,
+    code_agent_tab
 )
 
 from modules import chat, extensions
@@ -69,14 +70,16 @@ def create_tool_chain_agent():
 
 
 def create_code_agent():
-    return CodeAgent(
+    shared.code_agent = CodeAgent(
         "CodeAgent",
         get_active_template("CodeAgent"),
         shared.llm,
         shared.allowed_packages,
-        executor_endpoint="http://localhost:6060",
+        executor_port=6060,
         verbose=params["verbose"],
     )
+
+    return shared.code_agent
 
 
 def generate_objective(user_input: str, history: list[tuple[str, str]]):
@@ -100,6 +103,8 @@ def setup():
 
     shared.llm = OobaboogaLLM(params["api_endpoint"])
 
+    create_code_agent()
+
 
 def ui():
     """
@@ -112,6 +117,7 @@ def ui():
         tool_chain_agent_tab()
         summary_agent_tab()
         objective_agent_tab()
+        code_agent_tab()
 
 
 def output_modifier(string, state, is_chat=False) -> str:
