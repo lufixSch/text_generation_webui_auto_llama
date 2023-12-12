@@ -1,6 +1,6 @@
 import re
 import os
-import docker
+import shutil
 from docker import errors as docker_errors
 import pandas as pd
 
@@ -90,7 +90,9 @@ def run(self, objective: str, text: str) -> tuple[AnswerType, str]:
 class CodeAgent:
     """Agent which is able to execute code"""
 
-    DATA_PATH = os.path.join("code_exec", "files")
+    CONTAINER_PATH = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "code_exec")
+    )
     allowed_filetypes = ["csv"]
     allowed_languages = ["python"]
 
@@ -131,13 +133,12 @@ class CodeAgent:
         print(f"Creating Docker Container for {self.name}")
         print("... This might take a while ...")
 
-        path = os.path.abspath(os.path.join(os.path.dirname(__file__), "code_exec"))
-
         if self.verbose:
             print("> Building Docker Image")
-            print(f"{path}, {self.container_name}")
 
-        shared.docker_client.images.build(path=path, tag=self.container_name)
+        shared.docker_client.images.build(
+            path=self.CONTAINER_PATH, tag=self.container_name
+        )
 
         if self.verbose:
             print("> Image built successfully!")
@@ -145,10 +146,17 @@ class CodeAgent:
         if self.verbose:
             print("> Starting Docker Container")
 
+        # Run the container with volume mounts for data and code files
         shared.docker_client.containers.run(
             self.container_name,
             ports={5000: port},
             name=self.container_name,
+            volumes={
+                os.path.join(self.CONTAINER_PATH, "static"): {
+                    "bind": "/app/static",
+                    "mode": "rw",
+                }
+            },
             detach=True,
         )
 
@@ -156,6 +164,10 @@ class CodeAgent:
 
     def add_data(self, *paths: str):
         """Add data (.csv or similar) to the code executor"""
+
+        print(f"> Adding Data to {self.name}")
+
+        data_path = os.path.join(self.CONTAINER_PATH, "static", "files")
 
         for path in paths:
             basename = os.path.basename(path)
@@ -167,8 +179,9 @@ class CodeAgent:
             self.data[basename] = file_type
 
             # TODO: Move file into data folder of the container
+            shutil.copy(path, data_path)
 
-        print(self.data)
+        print(f">> Data: {', '.join([x for x in self.data.keys()])}")
 
     def add_pkg(self, *packages: str):
         """Extend list of usable python packages"""
@@ -183,7 +196,9 @@ class CodeAgent:
         prompt = f"{file[0]}:"
 
         if file[1] == "csv":
-            df = pd.read_csv(file[0])
+            df = pd.read_csv(
+                os.path.join(self.CONTAINER_PATH, "static", "files", file[0])
+            )
 
             # Load header and data types of each column in the csv
             cols = [f"{col}: {df[col].dtype}" for col in df.columns]
@@ -220,6 +235,8 @@ class CodeAgent:
 
     def run(self, objective: str) -> list[tuple[AnswerType, str]]:
         print(f"> Running Agent: {self.name}")
+
+        print(self.data)
 
         prompt = self.prompt_template.template.format(
             objective=objective,

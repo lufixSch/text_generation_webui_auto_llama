@@ -4,6 +4,9 @@ Run an Agent in the background which uses different tools to solve a given probl
 
 The Agent is triggered in the Chat mode by starting a message with `/do`. The Agent will then use the provided tools to solve the given problem and will add the results to the chat context.
 
+> **⚠️ WARNING: This project is currently stalled!**
+> I'm working on a clean implementation of ideas and concepts from this project and more in *[lufixSch/auto_llama](https://github.com/lufixSch/auto_llama)*.
+
 ## Tools
 ### Existing Tools
 - Wikipedia

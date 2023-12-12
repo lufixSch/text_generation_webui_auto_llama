@@ -9,8 +9,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# CMD ["python", "server.py" ]
-# EXPOSE 80
+CMD ["python", "server.py" ]
+EXPOSE 80
 
-CMD [ "flask", "--app", "server", "run", "--debug", "--host", "0.0.0.0"]
-EXPOSE 5000
+# CMD [ "flask", "--app", "server", "run", "--debug", "--host", "0.0.0.0"]
+# EXPOSE 5000

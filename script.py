@@ -19,7 +19,7 @@ from extensions.auto_llama.ui import (
     tool_tab,
     summary_agent_tab,
     objective_agent_tab,
-    code_agent_tab
+    code_agent_tab,
 )
 
 from modules import chat, extensions
@@ -70,14 +70,17 @@ def create_tool_chain_agent():
 
 
 def create_code_agent():
-    shared.code_agent = CodeAgent(
-        "CodeAgent",
-        get_active_template("CodeAgent"),
-        shared.llm,
-        shared.allowed_packages,
-        executor_port=6060,
-        verbose=params["verbose"],
-    )
+    if not shared.code_agent:
+        shared.code_agent = CodeAgent(
+            "CodeAgent",
+            get_active_template("CodeAgent"),
+            shared.llm,
+            shared.allowed_packages,
+            executor_port=6060,
+            verbose=params["verbose"],
+        )
+    else:
+        shared.code_agent.prompt_template = get_active_template("CodeAgent")
 
     return shared.code_agent
 
@@ -205,11 +208,14 @@ Give a brief description of what the code does and summarize its ouput.
 
         if len(answers) <= 1:
             user_input = chat_context_string.format(code="", output=answers[0][1])
-
-        user_input = chat_context_string.format(
-            code=answers[0][1], output=answers[1][1]
-        )
-        shared.response_modifier.extend(answers[2:])
+        else:
+            user_input = chat_context_string.format(
+                code=answers[0][1], output=answers[1][1]
+            )
+            shared.response_modifier.append(
+                (AnswerType.RESPONSE, f"Ouput: {answers[1][1]}")
+            )
+            shared.response_modifier.extend(answers[2:])
 
     result = chat.generate_chat_prompt(user_input, state, **kwargs)
     return result
